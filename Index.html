@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vorb — свет в конце туннеля</title>
+<meta name="description" content="Vorb — генератор конфига Cloudflare WARP для WireGuard.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%233D2E7C'/%3E%3Cpath d='M20 22C20 42 25 46 29 46' stroke='%23E6DEFF' stroke-width='6' fill='none' stroke-linecap='round'/%3E%3Cpath d='M44 22C44 42 39 46 35 46' stroke='%23E6DEFF' stroke-width='6' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='46' r='2.5' fill='%237EE3F2'/%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: light dark;
+    --primary: #6D5BD0;
+    --on-primary: #FFFFFF;
+    --primary-container: #E6DEFF;
+    --on-primary-container: #221255;
+    --secondary: #3D2E7C;
+    --accent: #7EE3F2;
+    --surface: #FFFBFF;
+    --surface-container: #F3EDF7;
+    --surface-container-high: #ECE6F0;
+    --on-surface: #1C1B1F;
+    --on-surface-variant: #49454F;
+    --outline: #CAC4D0;
+    --error: #B3261E;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 8px 24px rgba(0,0,0,.06);
+    --radius-xl: 32px;
+    --radius-lg: 24px;
+    --radius-md: 16px;
+    --radius-pill: 999px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --primary: #D0BCFF;
+      --on-primary: #381E72;
+      --primary-container: #4F378B;
+      --on-primary-container: #EADDFF;
+      --secondary: #3D2E7C;
+      --accent: #7EE3F2;
+      --surface: #141026;
+      --surface-container: #211F26;
+      --surface-container-high: #2B2930;
+      --on-surface: #E6E0E9;
+      --on-surface-variant: #CAC4D0;
+      --outline: #49454F;
+      --error: #F2B8B5;
+      --shadow: 0 1px 3px rgba(0,0,0,.5), 0 8px 24px rgba(0,0,0,.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Manrope', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: var(--surface);
+    color: var(--on-surface);
+    min-height: 100vh;
+    transition: background .3s, color .3s;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 24px 20px 64px;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 40px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .brand svg { width: 44px; height: 44px; flex-shrink: 0; }
+  .brand-name {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    color: var(--on-surface);
+  }
+  .tg-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: var(--radius-pill);
+    background: var(--primary-container);
+    color: var(--on-primary-container);
+    text-decoration: none;
+    transition: transform .15s ease, background .2s;
+  }
+  .tg-link:hover { transform: translateY(-1px); }
+  .tg-link:active { transform: scale(.97); }
+  .tg-link svg { width: 18px; height: 18px; }
+
+  .hero { text-align: center; margin-bottom: 32px; }
+  .hero h1 {
+    font-size: clamp(32px, 7vw, 48px);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -.02em;
+    margin: 0 0 16px;
+  }
+  .hero h1 span {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+  .hero p {
+    color: var(--on-surface-variant);
+    font-size: 16px;
+    margin: 0 auto;
+    max-width: 480px;
+  }
+
+  .card {
+    background: var(--surface-container);
+    border-radius: var(--radius-xl);
+    padding: 28px;
+    box-shadow: var(--shadow);
+    animation: cardIn .5s cubic-bezier(.2,0,0,1);
+  }
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(12px) scale(.98); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  .wave-box {
+    position: relative;
+    width: 100%;
+    height: 200px;
+    border-radius: var(--radius-lg);
+    background: var(--surface-container-high);
+    overflow: hidden;
+    margin-bottom: 20px;
+    display: none;
+  }
+  .wave-box.show { display: block; animation: fadeIn .35s ease; }
+  @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+
+  .fill {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 0%;
+    background: var(--primary);
+    transition: height .2s ease-out;
+  }
+  .fill::before {
+    content: '';
+    position: absolute;
+    top: -20px; left: 0;
+    width: 200%;
+    height: 22px;
+    background-color: var(--primary);
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 120' preserveAspectRatio='none'><path d='M0,60 C200,0 400,120 600,60 C800,0 1000,120 1200,60 L1200,120 L0,120 Z' fill='black'/></svg>");
+            mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 120' preserveAspectRatio='none'><path d='M0,60 C200,0 400,120 600,60 C800,0 1000,120 1200,60 L1200,120 L0,120 Z' fill='black'/></svg>");
+    -webkit-mask-size: 50% 100%;
+            mask-size: 50% 100%;
+    -webkit-mask-repeat: repeat-x;
+            mask-repeat: repeat-x;
+    animation: waveMove 3.5s linear infinite;
+  }
+  @keyframes waveMove {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+  .percent {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 48px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.02em;
+    color: var(--on-surface);
+    text-shadow:
+      0 0 10px var(--surface-container-high),
+      0 0 10px var(--surface-container-high),
+      0 0 10px var(--surface-container-high);
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 18px 36px;
+    font: inherit;
+    font-weight: 700;
+    font-size: 16px;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: var(--primary);
+    color: var(--on-primary);
+    cursor: pointer;
+    width: 100%;
+    transition: transform .12s ease, opacity .2s, box-shadow .2s;
+    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+  }
+  .btn:hover:not(:disabled) { box-shadow: 0 4px 16px rgba(0,0,0,.18); }
+  .btn:active:not(:disabled) { transform: scale(.97); }
+  .btn:disabled { opacity: .55; cursor: progress; }
+  .btn.secondary {
+    background: var(--surface-container-high);
+    color: var(--on-surface);
+    box-shadow: none;
+  }
+  .btn .icon {
+    width: 22px; height: 22px; flex-shrink: 0;
+  }
+
+  .result { display: none; margin-top: 20px; }
+  .result.show { display: block; animation: fadeIn .4s ease; }
+  pre {
+    text-align: left;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.55;
+    background: var(--surface-container-high);
+    color: var(--on-surface);
+    padding: 16px;
+    border-radius: var(--radius-md);
+    max-height: 260px;
+    overflow: auto;
+    margin: 0 0 16px;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row .btn { flex: 1 1 0; min-width: 140px; padding: 14px 20px; font-size: 14px; }
+
+  .error {
+    color: var(--error);
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 16px 0 0;
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--error) 12%, transparent);
+    display: none;
+  }
+  .error.show { display: block; }
+  .error code {
+    background: color-mix(in srgb, var(--error) 20%, transparent);
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-size: 12px;
+  }
+
+  .steps {
+    margin-top: 32px;
+    display: grid;
+    gap: 12px;
+  }
+  .step {
+    display: flex;
+    gap: 14px;
+    padding: 16px;
+    background: var(--surface-container);
+    border-radius: var(--radius-md);
+    align-items: flex-start;
+    animation: slideUp .5s cubic-bezier(.2,0,0,1) backwards;
+  }
+  .step:nth-child(1) { animation-delay: .05s; }
+  .step:nth-child(2) { animation-delay: .10s; }
+  .step:nth-child(3) { animation-delay: .15s; }
+  .step:nth-child(4) { animation-delay: .20s; }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: none; }
+  }
+  .step-num {
+    flex-shrink: 0;
+    width: 32px; height: 32px;
+    border-radius: var(--radius-pill);
+    background: var(--primary-container);
+    color: var(--on-primary-container);
+    font-weight: 700;
+    font-size: 15px;
+    display: grid;
+    place-items: center;
+  }
+  .step-text { font-size: 14px; color: var(--on-surface-variant); }
+  .step-text strong { color: var(--on-surface); font-weight: 700; }
+
+  footer {
+    margin-top: 48px;
+    text-align: center;
+    color: var(--on-surface-variant);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  footer a { color: var(--primary); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0s !important; transition-duration: 0s !important; }
+    .fill::before { animation: none; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="brand">
+      <svg viewBox="0 0 240 240" aria-hidden="true">
+        <defs>
+          <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#6D5BD0"/>
+            <stop offset="0.55" stop-color="#3D2E7C"/>
+            <stop offset="1" stop-color="#141026"/>
+          </linearGradient>
+          <linearGradient id="fg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#E6DEFF"/>
+            <stop offset="1" stop-color="#7EE3F2"/>
+          </linearGradient>
+        </defs>
+        <rect width="240" height="240" rx="60" fill="url(#bg)"/>
+        <path d="M 67 79 C 67 141, 85 167, 101 167" fill="none" stroke="url(#fg)" stroke-width="21" stroke-linecap="round"/>
+        <path d="M 173 79 C 173 141, 155 167, 139 167" fill="none" stroke="url(#fg)" stroke-width="21" stroke-linecap="round"/>
+        <circle cx="120" cy="167" r="8" fill="#FFFFFF"/>
+      </svg>
+      <span class="brand-name">Vorb</span>
+    </div>
+    <a class="tg-link" id="tgHeader" href="https://t.me/VorbVpn" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
+      </svg>
+      Telegram
+    </a>
+  </header>
+
+  <section class="hero">
+    <h1>Свет в конце <span>туннеля</span></h1>
+    <p>Получи бесплатный конфиг Cloudflare WARP для WireGuard. Одна кнопка — один файл — одна минута.</p>
+  </section>
+
+  <div class="card">
+    <div class="wave-box" id="waveBox">
+      <div class="fill" id="fill"></div>
+      <div class="percent" id="percent">0%</div>
+    </div>
+
+    <button class="btn" id="btn">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 3v12"/>
+        <path d="M7 10l5 5 5-5"/>
+        <path d="M5 21h14"/>
+      </svg>
+      Получить конфиг
+    </button>
+
+    <div class="error" id="error"></div>
+
+    <div class="result" id="result">
+      <pre id="conf"></pre>
+      <div class="row">
+        <button class="btn secondary" id="download">Скачать .conf</button>
+        <button class="btn secondary" id="again">Ещё раз</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text">Нажми <strong>«Получить конфиг»</strong> — сервер зарегистрирует новое устройство в Cloudflare WARP.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text">Файл <strong>warp.conf</strong> скачается автоматически.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text">Импортируй его в приложение <strong>Vorb</strong> или в официальный WireGuard.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-text">Подключись и наслаждайся. Конфиг можно получить заново в любой момент.</div>
+    </div>
+  </div>
+
+  <footer>
+    <p>
+      Vorb — генератор конфигов для личного использования. Не содержит встроенных серверов
+      и не предоставляет VPN-доступ сам по себе. Соблюдай законы своей страны и
+      <a href="https://www.cloudflare.com/terms/" target="_blank" rel="noopener">ToS Cloudflare</a>.
+    </p>
+    <p>© <span id="year"></span> Vorb · <a href="https://t.me/VorbVpn" id="tgFooter" target="_blank" rel="noopener">Telegram</a></p>
+  </footer>
+</div>
+
+<script>
+  // ==== НАСТРОЙКИ ====
+  const API_URL      = '/api/generate';           // куда шлём POST
+  const TELEGRAM_URL = 'https://t.me/VorbVpn';    // твой канал
+  // ===================
+
+  document.getElementById('tgHeader').href = TELEGRAM_URL;
+  document.getElementById('tgFooter').href = TELEGRAM_URL;
+  document.getElementById('year').textContent = new Date().getFullYear();
+
+  const btn       = document.getElementById('btn');
+  const waveBox   = document.getElementById('waveBox');
+  const fill      = document.getElementById('fill');
+  const percent   = document.getElementById('percent');
+  const errorEl   = document.getElementById('error');
+  const result    = document.getElementById('result');
+  const pre       = document.getElementById('conf');
+  const downloadBtn = document.getElementById('download');
+  const againBtn  = document.getElementById('again');
+
+  let currentP = 0;
+  let fakeTimer = null;
+  let confText = '';
+
+  function setProgress(p) {
+    currentP = Math.max(0, Math.min(100, p));
+    fill.style.height = currentP + '%';
+    percent.textContent = Math.round(currentP) + '%';
+  }
+
+  function startFake() {
+    setProgress(0);
+    fakeTimer = setInterval(() => {
+      const delta = (90 - currentP) * 0.06 + 0.15;
+      if (currentP + delta >= 90) {
+        clearInterval(fakeTimer); fakeTimer = null;
+        setProgress(90);
+      } else {
+        setProgress(currentP + delta);
+      }
+    }, 60);
+  }
+
+  function animateTo(target, duration = 500) {
+    return new Promise(resolve => {
+      const from = currentP;
+      const start = performance.now();
+      function step(now) {
+        const t = Math.min(1, (now - start) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        setProgress(from + (target - from) * eased);
+        if (t < 1) requestAnimationFrame(step);
+        else resolve();
+      }
+      requestAnimationFrame(step);
+    });
+  }
+
+  async function generate() {
+    btn.disabled = true;
+    btn.innerHTML = '<span style="display:inline-block;width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .7s linear infinite"></span> Генерирую…';
+    result.classList.remove('show');
+    errorEl.classList.remove('show');
+    waveBox.classList.add('show');
+    startFake();
+
+    try {
+      const res = await fetch(API_URL, { method: 'POST' });
+      if (!res.ok) {
+        let msg = 'сервер вернул ' + res.status;
+        try { const j = await res.json(); if (j.error) msg = j.error; } catch {}
+        throw new Error(msg);
+      }
+      confText = await res.text();
+      if (fakeTimer) { clearInterval(fakeTimer); fakeTimer = null; }
+      await animateTo(100, 500);
+      await new Promise(r => setTimeout(r, 300));
+
+      waveBox.classList.remove('show');
+      pre.textContent = confText;
+      result.classList.add('show');
+      download();
+    } catch (e) {
+      if (fakeTimer) { clearInterval(fakeTimer); fakeTimer = null; }
+      waveBox.classList.remove('show');
+      errorEl.innerHTML =
+        'Не удалось получить конфиг: <strong>' + escapeHtml(e.message) + '</strong>.<br>' +
+        'Проверь, что бэкенд запущен на <code>' + escapeHtml(API_URL) + '</code> ' +
+        '(см. инструкцию по <code>wgcf</code>).';
+      errorEl.classList.add('show');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML =
+        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+          '<path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/>' +
+        '</svg> Получить конфиг';
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+
+  function download() {
+    const blob = new Blob([confText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'warp.conf';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  btn.addEventListener('click', generate);
+  downloadBtn.addEventListener('click', download);
+  againBtn.addEventListener('click', () => {
+    result.classList.remove('show');
+    waveBox.classList.remove('show');
+    errorEl.classList.remove('show');
+  });
+
+  const style = document.createElement('style');
+  style.textContent = '@keyframes spin { to { transform: rotate(360deg) } }';
+  document.head.appendChild(style);
+</script>
+</body>
+</html>
